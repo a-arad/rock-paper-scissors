@@ -1,0 +1,199 @@
+name: "Span Task Orchestrator"
+
+on:
+  repository_dispatch:
+    types:
+      - span-task
+      - span-coordinate
+      - span-retry
+
+jobs:
+  execute-task:
+    if: github.event.action == 'span-task'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify prompt file exists
+        run: |
+          if [ ! -f ".span/tasks/${{ github.event.client_payload.task_id }}.md" ]; then
+            echo "ERROR: Prompt file not found!"
+            echo "Looking for: .span/tasks/${{ github.event.client_payload.task_id }}.md"
+            echo "Available files in .span/tasks/:"
+            ls -la .span/tasks/ || echo "Directory doesn't exist"
+            exit 1
+          fi
+          echo "Prompt file found: .span/tasks/${{ github.event.client_payload.task_id }}.md"
+
+      - name: Execute Claude Code Task
+        id: claude_task
+        uses: anthropics/claude-code-base-action@beta
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          claude_env: |
+            SPAN_TASK_ID: ${{ github.event.client_payload.task_id }}
+            SPAN_COMPONENT: ${{ github.event.client_payload.component }}
+            SPAN_PHASE: ${{ github.event.client_payload.phase }}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          max_turns: ${{ github.event.client_payload.max_turns || 500 }}
+          timeout_minutes: 30
+          allowed_tools: Bash,Edit,Write,Read,Glob,Grep,LS
+          prompt_file: .span/tasks/${{ github.event.client_payload.task_id }}.md
+
+      - name: Report Task Completion
+        uses: actions/github-script@v7
+        if: steps.claude_task.outputs.conclusion == 'success'
+        with:
+          script: |
+            await github.rest.repos.createDispatchEvent({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              event_type: 'span-coordinate',
+              client_payload: {
+                completed_task: '${{ github.event.client_payload.task_id }}',
+                component: '${{ github.event.client_payload.component }}',
+                triggered_by: 'task-completion'
+              }
+            });
+
+      - name: Report Task Failure
+        uses: actions/github-script@v7
+        if: failure() || steps.claude_task.outputs.conclusion == 'failure'
+        env:
+          RETRY_COUNT: ${{ github.event.client_payload.retry_count || 0 }}
+          COMPONENT: ${{ github.event.client_payload.component }}
+          TASK_ID: ${{ github.event.client_payload.task_id }}
+          TASK_CONCLUSION: ${{ steps.claude_task.outputs.conclusion }}
+        with:
+          script: |
+            const taskId = process.env.TASK_ID;
+            const component = process.env.COMPONENT;
+            const retryCount = parseInt(process.env.RETRY_COUNT);
+            const conclusion = process.env.TASK_CONCLUSION || 'workflow_failure';
+            
+            const issueBody = `Task ${taskId} failed. Component: ${component}. Check workflow logs for details.`;
+            
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `[Span] Task ${taskId} failed (attempt ${retryCount + 1})`,
+              body: issueBody,
+              labels: ['span-failed', 'needs-investigation', component]
+            });
+
+  coordinate-dependencies:
+    if: github.event.action == 'span-coordinate'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Coordinate Task Dependencies
+        uses: actions/github-script@v7
+        env:
+          COMPONENT: ${{ github.event.client_payload.component }}
+          COMPLETED_TASK: ${{ github.event.client_payload.completed_task }}
+        with:
+          script: |
+            // coordination_script.js - Task coordination logic for GitHub Actions
+            
+            const completedTask = process.env.COMPLETED_TASK;
+            const component = process.env.COMPONENT;
+            
+            console.log(`Task completed: ${completedTask} (${component})`);
+            
+            // Get span configuration to find dependent tasks
+            let configContent;
+            try {
+              const configResponse = await github.rest.repos.getContent({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                path: '.span/config.json'
+              });
+              configContent = Buffer.from(configResponse.data.content, 'base64').toString();
+            } catch (error) {
+              console.log('No span configuration found, skipping coordination');
+              return;
+            }
+            
+            const config = JSON.parse(configContent);
+            const taskGraph = config.task_graph;
+            
+            if (!taskGraph) {
+              console.log('No task graph found in configuration');
+              return;
+            }
+            
+            // Find tasks that depend on the completed task
+            const readyTasks = [];
+            for (const [taskId, task] of Object.entries(taskGraph.tasks)) {
+              const taskDependencies = taskGraph.dependencies[taskId] || [];
+              if (task.status === 'pending' && taskDependencies.includes(completedTask)) {
+                // Check if all dependencies are now satisfied
+                const allDepsSatisfied = taskDependencies.every(dep => {
+                  const depTask = taskGraph.tasks[dep];
+                  return depTask && depTask.status === 'completed';
+                });
+                
+                if (allDepsSatisfied) {
+                  readyTasks.push(taskId);
+                }
+              }
+            }
+            
+            console.log(`Found ${readyTasks.length} ready tasks: ${readyTasks.join(', ')}`);
+            
+            // Trigger ready tasks (max 3 concurrent)
+            const maxConcurrent = 3;
+            const tasksToTrigger = readyTasks.slice(0, maxConcurrent);
+            
+            for (const taskId of tasksToTrigger) {
+              const task = taskGraph.tasks[taskId];
+              
+              console.log(`Triggering task: ${task.title} (${task.component})`);
+              
+              // Trigger repository dispatch for the task
+              await github.rest.repos.createDispatchEvent({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                event_type: 'span-task',
+                client_payload: {
+                  task_id: taskId,
+                  task_title: task.title,
+                  component: task.component,
+                  retry_count: 0
+                }
+              });
+              
+              // Update task status to running in config
+              taskGraph.tasks[taskId].status = 'running';
+            }
+            
+            // Update the configuration file with new task statuses
+            if (tasksToTrigger.length > 0) {
+              // Mark completed task as completed
+              if (taskGraph.tasks[completedTask]) {
+                taskGraph.tasks[completedTask].status = 'completed';
+              }
+              
+              const updatedConfig = JSON.stringify(config, null, 2);
+              const encodedContent = Buffer.from(updatedConfig).toString('base64');
+              
+              await github.rest.repos.createOrUpdateFileContents({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                path: '.span/config.json',
+                message: `Update task statuses after ${completedTask} completion`,
+                content: encodedContent,
+                sha: configResponse.data.sha
+              });
+              
+              console.log('Updated span configuration with new task statuses');
+            }
+
