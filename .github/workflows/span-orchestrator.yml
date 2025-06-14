@@ -1,0 +1,184 @@
+name: Span Task Orchestrator
+on:
+  repository_dispatch:
+    types: [span-task, span-coordinate, span-retry]
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  actions: read
+
+jobs:
+  execute-task:
+    if: github.event.action == 'span-task'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: main
+
+      - name: Verify prompt file exists
+        run: |
+          if [ ! -f ".span/tasks/${{ github.event.client_payload.task_id }}.md" ]; then
+            echo "ERROR: Prompt file not found!"
+            echo "Looking for: .span/tasks/${{ github.event.client_payload.task_id }}.md"
+            echo "Available files in .span/tasks/:"
+            ls -la .span/tasks/ || echo "Directory doesn't exist"
+            exit 1
+          fi
+          echo "Prompt file found: .span/tasks/${{ github.event.client_payload.task_id }}.md"
+
+      - name: Execute Claude Code Task
+        id: claude_task
+        uses: anthropics/claude-code-base-action@beta
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt_file: ".span/tasks/${{ github.event.client_payload.task_id }}.md"
+          allowed_tools: "Bash,Edit,Write,Read,Glob,Grep,LS"
+          max_turns: "${{ github.event.client_payload.max_turns || 500 }}"
+          timeout_minutes: 30
+          claude_env: |
+            SPAN_TASK_ID: ${{ github.event.client_payload.task_id }}
+            SPAN_COMPONENT: ${{ github.event.client_payload.component }}
+            SPAN_PHASE: ${{ github.event.client_payload.phase }}
+            SPAN_DEPENDENCIES: ${{ join(github.event.client_payload.dependencies, ',') }}
+            SPAN_RETRY_COUNT: ${{ github.event.client_payload.retry_count || 0 }}
+            DEBUG: true
+            LOG_LEVEL: debug
+            GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Display Claude's Execution Log
+        if: always()
+        run: |
+          echo "=== CLAUDE EXECUTION LOG ==="
+          echo "Conclusion: ${{ steps.claude_task.outputs.conclusion }}"
+          echo "Execution file: ${{ steps.claude_task.outputs.execution_file }}"
+          if [ -f "${{ steps.claude_task.outputs.execution_file }}" ]; then
+            echo "=== FULL CONVERSATION ==="
+            cat "${{ steps.claude_task.outputs.execution_file }}" | jq '.' || cat "${{ steps.claude_task.outputs.execution_file }}"
+          else
+            echo "No execution file found"
+          fi
+          echo "=== END EXECUTION LOG ==="
+
+      - name: Report Task Completion
+        if: steps.claude_task.outputs.conclusion == 'success'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `[Span] Task ${{ github.event.client_payload.task_id }} completed`,
+              body: `✅ Task completed successfully.\n\nComponent: ${{ github.event.client_payload.component }}\nPhase: ${{ github.event.client_payload.phase }}\nConclusion: ${{ steps.claude_task.outputs.conclusion }}\n\nCheck associated PR for implementation details.`,
+              labels: ['span-completed', '${{ github.event.client_payload.component }}']
+            });
+            
+            await github.rest.repos.createDispatchEvent({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              event_type: 'span-coordinate',
+              client_payload: {
+                completed_task: '${{ github.event.client_payload.task_id }}',
+                component: '${{ github.event.client_payload.component }}'
+              }
+            });
+
+      - name: Report Task Failure  
+        if: failure() || steps.claude_task.outputs.conclusion == 'failure'
+        uses: actions/github-script@v7
+        env:
+          TASK_ID: ${{ github.event.client_payload.task_id }}
+          COMPONENT: ${{ github.event.client_payload.component }}
+          RETRY_COUNT: ${{ github.event.client_payload.retry_count || 0 }}
+          TASK_CONCLUSION: ${{ steps.claude_task.outputs.conclusion }}
+        with:
+          script: |
+            const taskId = process.env.TASK_ID;
+            const component = process.env.COMPONENT;
+            const retryCount = parseInt(process.env.RETRY_COUNT);
+            const maxRetries = 2;
+            const conclusion = process.env.TASK_CONCLUSION || 'workflow_failure';
+            const workflowUrl = "https://github.com/" + context.repo.owner + "/" + context.repo.repo + "/actions/runs/" + context.runId;
+            
+            const issueBody = "Task " + taskId + " failed. Component: " + component + ". Check workflow logs for details.";
+
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `[Span] Task ${taskId} failed (attempt ${retryCount + 1})`,
+              body: issueBody,
+              labels: ['span-failed', 'needs-investigation', component]
+            });
+
+  coordinate-dependencies:
+    if: github.event.action == 'span-coordinate'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Setup Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+          
+      - name: Cache Rust dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          
+      - name: Build span CLI
+        run: |
+          if [ -f "Cargo.toml" ]; then
+            cargo build --release
+            sudo cp target/release/span /usr/local/bin/span
+          else
+            echo "Span source not found in repository, skipping coordination"
+            exit 0
+          fi
+          
+      - name: Coordinate Task Dependencies
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OR_API_KEY: ${{ secrets.OR_API_KEY }}
+        run: |
+          span coordinate \
+            --completed-task "${{ github.event.client_payload.completed_task }}" \
+            --component "${{ github.event.client_payload.component }}" \
+            --repo "${{ github.repository }}"
+
+  retry-task:
+    if: github.event.action == 'span-retry'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Retry Claude Code Task
+        uses: anthropics/claude-code-base-action@beta
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt_file: ".span/tasks/${{ github.event.client_payload.task_id }}.md"
+          allowed_tools: "Bash,Edit,Write,Read,Glob,Grep,LS"
+          max_turns: "${{ github.event.client_payload.max_turns || 500 }}"
+          claude_env: |
+            SPAN_TASK_ID: ${{ github.event.client_payload.task_id }}
+            SPAN_COMPONENT: ${{ github.event.client_payload.component }}
+            SPAN_RETRY_COUNT: ${{ github.event.client_payload.retry_count || 1 }}
+            SPAN_USER_GUIDANCE: ${{ github.event.client_payload.guidance }}
+            GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
