@@ -58,7 +58,7 @@
         "component": "frontend",
         "max_turns": 100,
         "retry_count": 0,
-        "status": "pending",
+        "status": "running",
         "title": "Integrate Frontend and Backend"
       },
       "computer-player": {
@@ -100,7 +100,7 @@
         "component": "frontend",
         "max_turns": 100,
         "retry_count": 0,
-        "status": "pending",
+        "status": "running",
         "title": "Implement Score Tracking"
       },
       "setup-backend": {
