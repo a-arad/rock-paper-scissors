@@ -1,4 +1,5 @@
 import React, { createContext, useReducer } from 'react';
+import useGameApi from '../hooks/useGameApi';
 
 const GAME_CHOICES = {
   ROCK: 'rock',
@@ -17,7 +18,8 @@ const GAME_ACTIONS = {
   RESET_GAME: 'RESET_GAME',
   RESET_SCORES: 'RESET_SCORES',
   SET_LOADING: 'SET_LOADING',
-  SET_ERROR: 'SET_ERROR'
+  SET_ERROR: 'SET_ERROR',
+  SET_CONNECTION_STATUS: 'SET_CONNECTION_STATUS'
 };
 
 const initialState = {
@@ -29,7 +31,8 @@ const initialState = {
   gamesPlayed: 0,
   isLoading: false,
   error: null,
-  gameHistory: []
+  gameHistory: [],
+  isConnected: null
 };
 
 const gameReducer = (state, action) => {
@@ -90,6 +93,12 @@ const gameReducer = (state, action) => {
         isLoading: false
       };
 
+    case GAME_ACTIONS.SET_CONNECTION_STATUS:
+      return {
+        ...state,
+        isConnected: action.payload
+      };
+
     default:
       return state;
   }
@@ -120,29 +129,32 @@ export const GameContext = createContext();
 
 export const GameProvider = ({ children }) => {
   const [state, dispatch] = useReducer(gameReducer, initialState);
+  const { playGame, isConnected, checkConnection } = useGameApi();
 
   const makeMove = async (playerChoice) => {
     try {
       dispatch({ type: GAME_ACTIONS.SET_LOADING, payload: true });
       
-      await new Promise(resolve => setTimeout(resolve, 500));
+      const gameResult = await playGame(playerChoice);
       
-      const computerChoice = generateComputerChoice();
-      const result = determineWinner(playerChoice, computerChoice);
-
-      dispatch({
-        type: GAME_ACTIONS.MAKE_MOVE,
-        payload: {
-          playerChoice,
-          computerChoice,
-          result
-        }
-      });
+      if (gameResult) {
+        dispatch({
+          type: GAME_ACTIONS.MAKE_MOVE,
+          payload: {
+            playerChoice: gameResult.playerChoice,
+            computerChoice: gameResult.computerChoice,
+            result: gameResult.result
+          }
+        });
+        
+        dispatch({ type: GAME_ACTIONS.SET_CONNECTION_STATUS, payload: true });
+      }
     } catch (error) {
       dispatch({
         type: GAME_ACTIONS.SET_ERROR,
-        payload: 'Failed to make move. Please try again.'
+        payload: error.message || 'Failed to make move. Please try again.'
       });
+      dispatch({ type: GAME_ACTIONS.SET_CONNECTION_STATUS, payload: false });
     }
   };
 
@@ -165,6 +177,8 @@ export const GameProvider = ({ children }) => {
     resetGame,
     resetScores,
     getWinRate,
+    checkConnection,
+    isConnected: state.isConnected !== null ? state.isConnected : isConnected,
     GAME_CHOICES,
     GAME_RESULTS
   };

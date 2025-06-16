@@ -6,8 +6,6 @@ import { gameApi } from '../../api';
 
 jest.mock('../../api');
 
-const mockGameApi = gameApi;
-
 const TestComponent = () => {
   const context = useContext(GameContext);
   
@@ -22,7 +20,6 @@ const TestComponent = () => {
       <div data-testid="loading">{context.isLoading.toString()}</div>
       <div data-testid="error">{context.error || 'none'}</div>
       <div data-testid="win-rate">{context.getWinRate()}</div>
-      <div data-testid="connected">{context.isConnected?.toString() || 'null'}</div>
       <button onClick={() => context.makeMove(GAME_CHOICES.ROCK)}>
         Make Rock Move
       </button>
@@ -40,19 +37,17 @@ const renderWithProvider = (component) => {
   );
 };
 
-describe('GameContext with API Integration', () => {
+const mockGameApi = gameApi;
+
+describe('GameContext', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockGameApi.checkHealth.mockResolvedValue({ status: 'healthy' });
   });
 
-  test('provides initial state', async () => {
+  test('provides initial state', () => {
     renderWithProvider(<TestComponent />);
     
-    await waitFor(() => {
-      expect(screen.getByTestId('connected')).toHaveTextContent('true');
-    });
-
     expect(screen.getByTestId('player-choice')).toHaveTextContent('none');
     expect(screen.getByTestId('computer-choice')).toHaveTextContent('none');
     expect(screen.getByTestId('game-result')).toHaveTextContent('none');
@@ -65,28 +60,29 @@ describe('GameContext with API Integration', () => {
   });
 
   test('handles making a move that results in a win', async () => {
-    const mockGameResult = {
-      playerChoice: 'rock',
-      computerChoice: 'scissors',
-      result: 'win',
-      timestamp: '2024-01-01T00:00:00.000Z'
-    };
-
-    mockGameApi.playGame.mockResolvedValueOnce(mockGameResult);
+    // Setup: Player chooses rock, computer chooses scissors (player wins)
+    Math.random.mockReturnValue(0.9); // This will select scissors (index 2)
     
     renderWithProvider(<TestComponent />);
     
     const makeRockButton = screen.getByText('Make Rock Move');
     
-    await act(async () => {
+    act(() => {
       makeRockButton.click();
+    });
+
+    // Check loading state
+    expect(screen.getByTestId('loading')).toHaveTextContent('true');
+
+    // Fast-forward the timeout
+    act(() => {
+      jest.advanceTimersByTime(500);
     });
 
     await waitFor(() => {
       expect(screen.getByTestId('loading')).toHaveTextContent('false');
     });
 
-    expect(mockGameApi.playGame).toHaveBeenCalledWith('rock');
     expect(screen.getByTestId('player-choice')).toHaveTextContent('rock');
     expect(screen.getByTestId('computer-choice')).toHaveTextContent('scissors');
     expect(screen.getByTestId('game-result')).toHaveTextContent('win');
@@ -97,28 +93,25 @@ describe('GameContext with API Integration', () => {
   });
 
   test('handles making a move that results in a loss', async () => {
-    const mockGameResult = {
-      playerChoice: 'rock',
-      computerChoice: 'paper',
-      result: 'lose',
-      timestamp: '2024-01-01T00:00:00.000Z'
-    };
-
-    mockGameApi.playGame.mockResolvedValueOnce(mockGameResult);
+    // Setup: Player chooses rock, computer chooses paper (player loses)
+    Math.random.mockReturnValue(0.4); // This will select paper (index 1)
     
     renderWithProvider(<TestComponent />);
     
     const makeRockButton = screen.getByText('Make Rock Move');
     
-    await act(async () => {
+    act(() => {
       makeRockButton.click();
+    });
+
+    act(() => {
+      jest.advanceTimersByTime(500);
     });
 
     await waitFor(() => {
       expect(screen.getByTestId('loading')).toHaveTextContent('false');
     });
 
-    expect(mockGameApi.playGame).toHaveBeenCalledWith('rock');
     expect(screen.getByTestId('player-choice')).toHaveTextContent('rock');
     expect(screen.getByTestId('computer-choice')).toHaveTextContent('paper');
     expect(screen.getByTestId('game-result')).toHaveTextContent('lose');
@@ -129,28 +122,25 @@ describe('GameContext with API Integration', () => {
   });
 
   test('handles making a move that results in a tie', async () => {
-    const mockGameResult = {
-      playerChoice: 'rock',
-      computerChoice: 'rock',
-      result: 'tie',
-      timestamp: '2024-01-01T00:00:00.000Z'
-    };
-
-    mockGameApi.playGame.mockResolvedValueOnce(mockGameResult);
+    // Setup: Player chooses rock, computer chooses rock (tie)
+    Math.random.mockReturnValue(0.1); // This will select rock (index 0)
     
     renderWithProvider(<TestComponent />);
     
     const makeRockButton = screen.getByText('Make Rock Move');
     
-    await act(async () => {
+    act(() => {
       makeRockButton.click();
+    });
+
+    act(() => {
+      jest.advanceTimersByTime(500);
     });
 
     await waitFor(() => {
       expect(screen.getByTestId('loading')).toHaveTextContent('false');
     });
 
-    expect(mockGameApi.playGame).toHaveBeenCalledWith('rock');
     expect(screen.getByTestId('player-choice')).toHaveTextContent('rock');
     expect(screen.getByTestId('computer-choice')).toHaveTextContent('rock');
     expect(screen.getByTestId('game-result')).toHaveTextContent('tie');
@@ -160,91 +150,59 @@ describe('GameContext with API Integration', () => {
     expect(screen.getByTestId('win-rate')).toHaveTextContent('0');
   });
 
-  test('handles API errors gracefully', async () => {
-    const apiError = new Error('Network connection failed');
-    mockGameApi.playGame.mockRejectedValueOnce(apiError);
+  test('resets game state', async () => {
+    Math.random.mockReturnValue(0.1);
     
     renderWithProvider(<TestComponent />);
     
-    const makeRockButton = screen.getByText('Make Rock Move');
-    
-    await act(async () => {
-      makeRockButton.click();
-    });
-
-    await waitFor(() => {
-      expect(screen.getByTestId('error')).toHaveTextContent('Network connection failed');
-    });
-
-    expect(screen.getByTestId('loading')).toHaveTextContent('false');
-    expect(screen.getByTestId('connected')).toHaveTextContent('false');
-    expect(screen.getByTestId('player-choice')).toHaveTextContent('none');
-    expect(screen.getByTestId('games-played')).toHaveTextContent('0');
-  });
-
-  test('resets game state but keeps scores', async () => {
-    const mockGameResult = {
-      playerChoice: 'rock',
-      computerChoice: 'scissors',
-      result: 'win'
-    };
-
-    mockGameApi.playGame.mockResolvedValueOnce(mockGameResult);
-    
-    renderWithProvider(<TestComponent />);
-    
-    // Play a game
-    const makeRockButton = screen.getByText('Make Rock Move');
-    await act(async () => {
-      makeRockButton.click();
-    });
-
-    await waitFor(() => {
-      expect(screen.getByTestId('player-score')).toHaveTextContent('1');
-    });
-
-    // Reset game
-    const resetGameButton = screen.getByText('Reset Game');
+    // Make a move first
     act(() => {
-      resetGameButton.click();
+      screen.getByText('Make Rock Move').click();
     });
 
-    // Check that only current game state is reset, scores remain
+    act(() => {
+      jest.advanceTimersByTime(500);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('loading')).toHaveTextContent('false');
+    });
+
+    // Reset the game
+    act(() => {
+      screen.getByText('Reset Game').click();
+    });
+
     expect(screen.getByTestId('player-choice')).toHaveTextContent('none');
     expect(screen.getByTestId('computer-choice')).toHaveTextContent('none');
     expect(screen.getByTestId('game-result')).toHaveTextContent('none');
+    // Scores should remain
     expect(screen.getByTestId('games-played')).toHaveTextContent('1');
-    expect(screen.getByTestId('player-score')).toHaveTextContent('1');
   });
 
   test('resets all scores and game state', async () => {
-    const mockGameResult = {
-      playerChoice: 'rock',
-      computerChoice: 'scissors',
-      result: 'win'
-    };
-
-    mockGameApi.playGame.mockResolvedValueOnce(mockGameResult);
+    Math.random.mockReturnValue(0.1);
     
     renderWithProvider(<TestComponent />);
     
-    // Play a game
-    const makeRockButton = screen.getByText('Make Rock Move');
-    await act(async () => {
-      makeRockButton.click();
+    // Make a move first
+    act(() => {
+      screen.getByText('Make Rock Move').click();
+    });
+
+    act(() => {
+      jest.advanceTimersByTime(500);
     });
 
     await waitFor(() => {
-      expect(screen.getByTestId('player-score')).toHaveTextContent('1');
+      expect(screen.getByTestId('loading')).toHaveTextContent('false');
     });
 
-    // Reset scores
-    const resetScoresButton = screen.getByText('Reset Scores');
+    // Reset all scores
     act(() => {
-      resetScoresButton.click();
+      screen.getByText('Reset Scores').click();
     });
 
-    // Check that all state is reset
     expect(screen.getByTestId('player-choice')).toHaveTextContent('none');
     expect(screen.getByTestId('computer-choice')).toHaveTextContent('none');
     expect(screen.getByTestId('game-result')).toHaveTextContent('none');
@@ -255,72 +213,47 @@ describe('GameContext with API Integration', () => {
   });
 
   test('calculates win rate correctly', async () => {
-    const winResult = {
-      playerChoice: 'rock',
-      computerChoice: 'scissors',
-      result: 'win'
-    };
-
-    const loseResult = {
-      playerChoice: 'rock',
-      computerChoice: 'paper',
-      result: 'lose'
-    };
-
-    mockGameApi.playGame
-      .mockResolvedValueOnce(winResult)
-      .mockResolvedValueOnce(loseResult);
+    Math.random
+      .mockReturnValueOnce(0.9) // scissors - player wins
+      .mockReturnValueOnce(0.4) // paper - player loses
+      .mockReturnValueOnce(0.9); // scissors - player wins
     
     renderWithProvider(<TestComponent />);
-    
-    const makeRockButton = screen.getByText('Make Rock Move');
     
     // First game - win
-    await act(async () => {
-      makeRockButton.click();
+    act(() => {
+      screen.getByText('Make Rock Move').click();
     });
-
+    act(() => {
+      jest.advanceTimersByTime(500);
+    });
     await waitFor(() => {
-      expect(screen.getByTestId('win-rate')).toHaveTextContent('100');
+      expect(screen.getByTestId('loading')).toHaveTextContent('false');
     });
+    expect(screen.getByTestId('win-rate')).toHaveTextContent('100');
 
     // Second game - lose
-    await act(async () => {
-      makeRockButton.click();
-    });
-
-    await waitFor(() => {
-      expect(screen.getByTestId('win-rate')).toHaveTextContent('50');
-    });
-  });
-
-  test('shows loading state during API calls', async () => {
-    let resolvePromise;
-    const promise = new Promise((resolve) => {
-      resolvePromise = resolve;
-    });
-
-    mockGameApi.playGame.mockReturnValueOnce(promise);
-    
-    renderWithProvider(<TestComponent />);
-    
-    const makeRockButton = screen.getByText('Make Rock Move');
-    
     act(() => {
-      makeRockButton.click();
+      screen.getByText('Make Rock Move').click();
     });
-
-    expect(screen.getByTestId('loading')).toHaveTextContent('true');
-
-    await act(async () => {
-      resolvePromise({
-        playerChoice: 'rock',
-        computerChoice: 'scissors',
-        result: 'win'
-      });
-      await promise;
+    act(() => {
+      jest.advanceTimersByTime(500);
     });
+    await waitFor(() => {
+      expect(screen.getByTestId('loading')).toHaveTextContent('false');
+    });
+    expect(screen.getByTestId('win-rate')).toHaveTextContent('50');
 
-    expect(screen.getByTestId('loading')).toHaveTextContent('false');
+    // Third game - win
+    act(() => {
+      screen.getByText('Make Rock Move').click();
+    });
+    act(() => {
+      jest.advanceTimersByTime(500);
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId('loading')).toHaveTextContent('false');
+    });
+    expect(screen.getByTestId('win-rate')).toHaveTextContent('67');
   });
 });
