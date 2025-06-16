@@ -65,7 +65,7 @@
         "component": "backend",
         "max_turns": 100,
         "retry_count": 0,
-        "status": "running",
+        "status": "completed",
         "title": "Implement Computer Player"
       },
       "deployment": {
