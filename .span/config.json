@@ -86,7 +86,7 @@
         "component": "backend",
         "max_turns": 100,
         "retry_count": 0,
-        "status": "pending",
+        "status": "running",
         "title": "Implement Core Game Logic"
       },
       "game-state": {
@@ -114,7 +114,7 @@
         "component": "frontend",
         "max_turns": 100,
         "retry_count": 0,
-        "status": "pending",
+        "status": "running",
         "title": "Initialize React Frontend"
       },
       "ui-components": {
