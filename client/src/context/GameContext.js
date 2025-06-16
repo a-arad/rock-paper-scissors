@@ -1,4 +1,5 @@
-import React, { createContext, useReducer } from 'react';
+import React, { createContext, useReducer, useEffect } from 'react';
+import { useScores } from '../hooks/useScores';
 
 const GAME_CHOICES = {
   ROCK: 'rock',
@@ -20,17 +21,17 @@ const GAME_ACTIONS = {
   SET_ERROR: 'SET_ERROR'
 };
 
-const initialState = {
+const getInitialState = (persistedScores = null) => ({
   playerChoice: null,
   computerChoice: null,
   gameResult: null,
-  playerScore: 0,
-  computerScore: 0,
-  gamesPlayed: 0,
+  playerScore: persistedScores?.playerScore || 0,
+  computerScore: persistedScores?.computerScore || 0,
+  gamesPlayed: persistedScores?.gamesPlayed || 0,
   isLoading: false,
   error: null,
   gameHistory: []
-};
+});
 
 const gameReducer = (state, action) => {
   switch (action.type) {
@@ -72,9 +73,7 @@ const gameReducer = (state, action) => {
       };
 
     case GAME_ACTIONS.RESET_SCORES:
-      return {
-        ...initialState
-      };
+      return getInitialState();
 
     case GAME_ACTIONS.SET_LOADING:
       return {
@@ -119,7 +118,8 @@ const generateComputerChoice = () => {
 export const GameContext = createContext();
 
 export const GameProvider = ({ children }) => {
-  const [state, dispatch] = useReducer(gameReducer, initialState);
+  const scoreHook = useScores();
+  const [state, dispatch] = useReducer(gameReducer, getInitialState(scoreHook.scores));
 
   const makeMove = async (playerChoice) => {
     try {
@@ -138,6 +138,8 @@ export const GameProvider = ({ children }) => {
           result
         }
       });
+
+      scoreHook.addGameResult(result, playerChoice, computerChoice);
     } catch (error) {
       dispatch({
         type: GAME_ACTIONS.SET_ERROR,
@@ -152,12 +154,27 @@ export const GameProvider = ({ children }) => {
 
   const resetScores = () => {
     dispatch({ type: GAME_ACTIONS.RESET_SCORES });
+    scoreHook.resetAll();
   };
 
   const getWinRate = () => {
     if (state.gamesPlayed === 0) return 0;
     return Math.round((state.playerScore / state.gamesPlayed) * 100);
   };
+
+  useEffect(() => {
+    if (scoreHook.scores && (
+      state.playerScore !== scoreHook.scores.playerScore ||
+      state.computerScore !== scoreHook.scores.computerScore ||
+      state.gamesPlayed !== scoreHook.scores.gamesPlayed
+    )) {
+      scoreHook.updateScores({
+        playerScore: state.playerScore,
+        computerScore: state.computerScore,
+        gamesPlayed: state.gamesPlayed
+      });
+    }
+  }, [state.playerScore, state.computerScore, state.gamesPlayed]);
 
   const contextValue = {
     ...state,
@@ -166,7 +183,12 @@ export const GameProvider = ({ children }) => {
     resetScores,
     getWinRate,
     GAME_CHOICES,
-    GAME_RESULTS
+    GAME_RESULTS,
+    persistedScores: scoreHook.scores,
+    gameHistory: scoreHook.gameHistory,
+    gameStats: scoreHook.stats,
+    isStorageLoading: scoreHook.isLoading,
+    storageError: scoreHook.error
   };
 
   return (
