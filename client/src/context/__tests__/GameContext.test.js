@@ -3,6 +3,47 @@ import { render, screen, act, waitFor } from '@testing-library/react';
 import { GameProvider, GameContext, GAME_CHOICES, GAME_RESULTS } from '../GameContext';
 import { useContext } from 'react';
 
+jest.mock('../../hooks/useScores', () => ({
+  useScores: () => ({
+    scores: {
+      playerScore: 0,
+      computerScore: 0,
+      gamesPlayed: 0,
+      winRate: 0,
+      lastUpdated: '2023-01-01T00:00:00.000Z'
+    },
+    gameHistory: [],
+    stats: {
+      totalGames: 0,
+      wins: 0,
+      losses: 0,
+      ties: 0,
+      winStreak: 0,
+      maxWinStreak: 0,
+      lossStreak: 0,
+      maxLossStreak: 0,
+      favoriteChoice: null,
+      choiceStats: {
+        rock: { played: 0, won: 0 },
+        paper: { played: 0, won: 0 },
+        scissors: { played: 0, won: 0 }
+      },
+      lastPlayed: null
+    },
+    isLoading: false,
+    error: null,
+    updateScores: jest.fn(),
+    addGameResult: jest.fn(),
+    resetScores: jest.fn(),
+    resetHistory: jest.fn(),
+    resetStats: jest.fn(),
+    resetAll: jest.fn(),
+    getWinPercentage: jest.fn(() => 0),
+    getCurrentStreak: jest.fn(() => ({ type: 'none', count: 0 })),
+    getRecentGames: jest.fn(() => [])
+  })
+}));
+
 const TestComponent = () => {
   const context = useContext(GameContext);
   
