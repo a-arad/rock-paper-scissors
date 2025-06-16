@@ -121,7 +121,7 @@
         "component": "frontend",
         "max_turns": 100,
         "retry_count": 0,
-        "status": "running",
+        "status": "completed",
         "title": "Create UI Components"
       }
     }
