@@ -6,123 +6,137 @@
     "max_retry_attempts": 2
   },
   "project": {
-    "description": "A simple Rock Paper Scissors game web application",
-    "name": "rock-paper-scissors"
+    "description": "Interactive D3 visualization of GDP vs fertility rate over time using World Bank data",
+    "name": "gdp-fertility-viz"
   },
   "task_graph": {
     "dependencies": {
-      "api-integration": [
-        "computer-player",
-        "game-state"
+      "backend-1": [
+        "setup-1"
       ],
-      "computer-player": [
-        "game-logic"
+      "backend-2": [
+        "backend-1"
       ],
-      "deployment": [
-        "e2e-tests"
+      "deploy-1": [
+        "integration-1"
       ],
-      "e2e-tests": [
-        "api-integration"
+      "frontend-1": [
+        "setup-1"
       ],
-      "game-logic": [
-        "setup-backend"
+      "frontend-2": [
+        "frontend-1"
       ],
-      "game-state": [
-        "ui-components"
+      "frontend-3": [
+        "frontend-2"
       ],
-      "score-tracking": [
-        "game-state"
+      "frontend-4": [
+        "frontend-2"
       ],
-      "setup-backend": [],
-      "setup-frontend": [],
-      "ui-components": [
-        "setup-frontend"
+      "integration-1": [
+        "backend-2",
+        "frontend-2"
+      ],
+      "setup-1": [],
+      "testing-1": [
+        "backend-2"
+      ],
+      "testing-2": [
+        "frontend-3",
+        "frontend-4"
       ]
     },
     "parallel_groups": [
       [
-        "setup-frontend",
-        "setup-backend"
+        "backend-1",
+        "frontend-1"
       ],
       [
-        "ui-components",
-        "game-logic"
+        "frontend-3",
+        "frontend-4",
+        "testing-1"
       ],
       [
-        "game-state",
-        "computer-player"
+        "testing-1",
+        "testing-2"
       ]
     ],
     "tasks": {
-      "api-integration": {
-        "component": "frontend",
-        "max_turns": 100,
-        "retry_count": 0,
-        "status": "running",
-        "title": "Integrate Frontend and Backend"
-      },
-      "computer-player": {
+      "backend-1": {
         "component": "backend",
         "max_turns": 100,
         "retry_count": 0,
-        "status": "completed",
-        "title": "Implement Computer Player"
+        "status": "pending",
+        "title": "Implement World Bank API client"
       },
-      "deployment": {
+      "backend-2": {
+        "component": "backend",
+        "max_turns": 100,
+        "retry_count": 0,
+        "status": "pending",
+        "title": "Create Flask API endpoints"
+      },
+      "deploy-1": {
         "component": "infrastructure",
         "max_turns": 100,
         "retry_count": 0,
         "status": "pending",
-        "title": "Setup Vercel Deployment"
+        "title": "Vercel deployment setup"
       },
-      "e2e-tests": {
+      "frontend-1": {
+        "component": "frontend",
+        "max_turns": 100,
+        "retry_count": 0,
+        "status": "pending",
+        "title": "Basic HTML/CSS structure"
+      },
+      "frontend-2": {
+        "component": "frontend",
+        "max_turns": 100,
+        "retry_count": 0,
+        "status": "pending",
+        "title": "D3 scatter plot implementation"
+      },
+      "frontend-3": {
+        "component": "frontend",
+        "max_turns": 100,
+        "retry_count": 0,
+        "status": "pending",
+        "title": "Time slider component"
+      },
+      "frontend-4": {
+        "component": "frontend",
+        "max_turns": 100,
+        "retry_count": 0,
+        "status": "pending",
+        "title": "Country selection dropdown"
+      },
+      "integration-1": {
+        "component": "frontend",
+        "max_turns": 100,
+        "retry_count": 0,
+        "status": "pending",
+        "title": "Connect frontend to API"
+      },
+      "setup-1": {
+        "component": "infrastructure",
+        "max_turns": 100,
+        "retry_count": 0,
+        "status": "pending",
+        "title": "Initialize project structure"
+      },
+      "testing-1": {
         "component": "testing",
         "max_turns": 100,
         "retry_count": 0,
         "status": "pending",
-        "title": "End-to-End Testing"
+        "title": "Backend unit tests"
       },
-      "game-logic": {
-        "component": "backend",
+      "testing-2": {
+        "component": "testing",
         "max_turns": 100,
         "retry_count": 0,
-        "status": "completed",
-        "title": "Implement Core Game Logic"
-      },
-      "game-state": {
-        "component": "frontend",
-        "max_turns": 100,
-        "retry_count": 0,
-        "status": "completed",
-        "title": "Implement Game State Management"
-      },
-      "score-tracking": {
-        "component": "frontend",
-        "max_turns": 100,
-        "retry_count": 0,
-        "status": "completed",
-        "title": "Implement Score Tracking"
-      },
-      "setup-backend": {
-        "component": "backend",
-        "max_turns": 100,
-        "retry_count": 0,
-        "status": "completed",
-        "title": "Initialize Express Backend"
-      },
-      "setup-frontend": {
-        "component": "frontend",
-        "max_turns": 100,
-        "retry_count": 0,
-        "status": "completed",
-        "title": "Initialize React Frontend"
-      },
-      "ui-components": {
-        "component": "frontend",
-        "max_turns": 100,
-        "retry_count": 0,
-        "status": "completed",
-        "title": "Create UI Components"
+        "status": "pending",
+        "title": "Frontend tests"
       }
     }
   },
