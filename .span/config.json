@@ -6,31 +6,125 @@
     "max_retry_attempts": 2
   },
   "project": {
-    "architecture": {
-      "backend": {
-        "framework": "Express",
-        "language": "Node.js",
-        "libraries": [
-          "cors"
-        ]
-      },
-      "database": null,
-      "deployment": "Vercel",
-      "frontend": {
-        "framework": "React",
-        "language": "JavaScript",
-        "libraries": [
-          "styled-components"
-        ]
-      }
-    },
     "description": "A simple Rock Paper Scissors game web application",
     "name": "rock-paper-scissors"
   },
   "task_graph": {
-    "dependencies": {},
-    "parallel_groups": [],
-    "tasks": {}
+    "dependencies": {
+      "api-integration": [
+        "computer-player",
+        "game-state"
+      ],
+      "computer-player": [
+        "game-logic"
+      ],
+      "deployment": [
+        "e2e-tests"
+      ],
+      "e2e-tests": [
+        "api-integration"
+      ],
+      "game-logic": [
+        "setup-backend"
+      ],
+      "game-state": [
+        "ui-components"
+      ],
+      "score-tracking": [
+        "game-state"
+      ],
+      "setup-backend": [],
+      "setup-frontend": [],
+      "ui-components": [
+        "setup-frontend"
+      ]
+    },
+    "parallel_groups": [
+      [
+        "setup-frontend",
+        "setup-backend"
+      ],
+      [
+        "ui-components",
+        "game-logic"
+      ],
+      [
+        "game-state",
+        "computer-player"
+      ]
+    ],
+    "tasks": {
+      "api-integration": {
+        "component": "frontend",
+        "max_turns": 100,
+        "retry_count": 0,
+        "status": "pending",
+        "title": "Integrate Frontend and Backend"
+      },
+      "computer-player": {
+        "component": "backend",
+        "max_turns": 100,
+        "retry_count": 0,
+        "status": "pending",
+        "title": "Implement Computer Player"
+      },
+      "deployment": {
+        "component": "infrastructure",
+        "max_turns": 100,
+        "retry_count": 0,
+        "status": "pending",
+        "title": "Setup Vercel Deployment"
+      },
+      "e2e-tests": {
+        "component": "testing",
+        "max_turns": 100,
+        "retry_count": 0,
+        "status": "pending",
+        "title": "End-to-End Testing"
+      },
+      "game-logic": {
+        "component": "backend",
+        "max_turns": 100,
+        "retry_count": 0,
+        "status": "pending",
+        "title": "Implement Core Game Logic"
+      },
+      "game-state": {
+        "component": "frontend",
+        "max_turns": 100,
+        "retry_count": 0,
+        "status": "pending",
+        "title": "Implement Game State Management"
+      },
+      "score-tracking": {
+        "component": "frontend",
+        "max_turns": 100,
+        "retry_count": 0,
+        "status": "pending",
+        "title": "Implement Score Tracking"
+      },
+      "setup-backend": {
+        "component": "backend",
+        "max_turns": 100,
+        "retry_count": 0,
+        "status": "pending",
+        "title": "Initialize Express Backend"
+      },
+      "setup-frontend": {
+        "component": "frontend",
+        "max_turns": 100,
+        "retry_count": 0,
+        "status": "pending",
+        "title": "Initialize React Frontend"
+      },
+      "ui-components": {
+        "component": "frontend",
+        "max_turns": 100,
+        "retry_count": 0,
+        "status": "pending",
+        "title": "Create UI Components"
+      }
+    }
   },
   "version": "1.0",
   "workflows": {
