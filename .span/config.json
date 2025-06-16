@@ -107,7 +107,7 @@
         "component": "backend",
         "max_turns": 100,
         "retry_count": 0,
-        "status": "pending",
+        "status": "completed",
         "title": "Initialize Express Backend"
       },
       "setup-frontend": {
