@@ -1,0 +1,40 @@
+{
+  "orchestration": {
+    "auto_retry": true,
+    "default_model": "anthropic/claude-3.5-sonnet",
+    "max_parallel_tasks": 3,
+    "max_retry_attempts": 2
+  },
+  "project": {
+    "architecture": {
+      "backend": {
+        "framework": "Express",
+        "language": "Node.js",
+        "libraries": [
+          "cors"
+        ]
+      },
+      "database": null,
+      "deployment": "Vercel",
+      "frontend": {
+        "framework": "React",
+        "language": "JavaScript",
+        "libraries": [
+          "styled-components"
+        ]
+      }
+    },
+    "description": "A simple Rock Paper Scissors game web application",
+    "name": "rock-paper-scissors"
+  },
+  "task_graph": {
+    "dependencies": {},
+    "parallel_groups": [],
+    "tasks": {}
+  },
+  "version": "1.0",
+  "workflows": {
+    "claude_workflow": ".github/workflows/claude.yml",
+    "span_orchestrator": ".github/workflows/span-orchestrator.yml"
+  }
+}
